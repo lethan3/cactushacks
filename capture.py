@@ -2,7 +2,7 @@ import cv2
 
 def take_picture():
     # Initialize the camera (0 is the default USB camera index)
-    cap = cv2.VideoCapture(0)
+    cap = cv2.VideoCapture(1)
     
     # Optional: Set resolution to 1080p (1920x1080)
     # Without this, it often defaults to 640x480
@@ -25,7 +25,7 @@ def take_picture():
 
     if ret:
         # Save the image
-        filename = "webcam_photo.jpg"
+        filename = "webcam_photo_jetson.jpg"
         cv2.imwrite(filename, frame)
         print(f"Success: Image saved as {filename}")
     else:
