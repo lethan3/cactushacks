@@ -137,7 +137,10 @@ class PlantCareAgent:
             plant = self.plants.get(args.get("plant_name"))
             if not plant:
                 return {"error": f"Plant '{args.get('plant_name')}' not found"}
-            result = plant.take_picture()
+            # Pass camera and overshoot_client if available
+            camera = getattr(self, 'camera', None)
+            overshoot_client = getattr(self, 'overshoot_client', None)
+            result = plant.take_picture(camera=camera, overshoot_client=overshoot_client)
             if self.logger:
                 self.logger.log_plant_status(plant.name, result, now)
             plant.add_action_to_history(name, args, "", result, now)

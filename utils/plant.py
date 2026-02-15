@@ -212,15 +212,15 @@ class ActualPlant(Plant):
             current_x: Current x position of the camera
             current_y: Current y position of the camera
         
-        Note: camera.move() uses cy -= dy, so positive dy moves up, negative dy moves down.
+        Note: camera.move() expects dy where positive = down (increases cy), negative = up (decreases cy)
         """
         # Calculate delta to move to plant position
         dx = self.pos_x - current_x
-        # For y: camera.move() uses cy -= dy, so to move down (increase cy), we need negative dy
+        # For y: camera.move() expects positive dy = down (increase cy), negative dy = up (decrease cy)
         # To move from current_y to pos_y:
-        # - If pos_y > current_y (move down), we need negative dy: dy = current_y - pos_y
-        # - If pos_y < current_y (move up), we need positive dy: dy = current_y - pos_y
-        dy = current_y - self.pos_y
+        # - If pos_y > current_y (move down), we need positive dy: dy = pos_y - current_y
+        # - If pos_y < current_y (move up), we need negative dy: dy = pos_y - current_y
+        dy = self.pos_y - current_y
         camera.move(dx, dy)
 
     def _get_hydration_status(self):
@@ -228,10 +228,38 @@ class ActualPlant(Plant):
         # TODO: Call camera/VLM to analyze image and extract hydration status
         raise NotImplementedError("ActualPlant._get_hydration_status() not yet implemented")
 
-    def take_picture(self):
-        """Take a picture and return plant status including hydration."""
-        # TODO: Call camera/VLM to analyze image
-        return self.format_observable_status()
+    def take_picture(self, camera=None, overshoot_client=None):
+        """
+        Take a picture and return plant status including hydration.
+        
+        Args:
+            camera: Camera object to use for taking picture (optional)
+            overshoot_client: OvershootAI client for image analysis (optional)
+        """
+        if camera is None or overshoot_client is None:
+            # Fallback to default format if camera/client not provided
+            return self.format_observable_status()
+        
+        # Navigate to plant position before taking picture
+        try:
+            # Get current camera position
+            current_x, current_y = camera.get_position()
+            # Navigate to this plant's position
+            self.navigate_to_plant(camera, current_x, current_y)
+            # Update current position after navigation
+            current_x, current_y = camera.get_position()
+            
+            # Take picture at plant's position
+            image = camera.take_picture()
+            # Analyze image using overshoot.ai
+            result = overshoot_client.analyze_plant_image(image, self.name, self.species)
+            return result
+        except Exception as e:
+            print(f"Error taking picture with camera: {e}")
+            import traceback
+            traceback.print_exc()
+            # Fallback to default format
+            return self.format_observable_status()
 
     def water(self, quantity):
         now = datetime.now()

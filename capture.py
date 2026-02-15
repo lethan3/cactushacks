@@ -4,10 +4,10 @@ def take_picture():
     # Initialize the camera (0 is the default USB camera index)
     cap = cv2.VideoCapture(1)
     
-    # Optional: Set resolution to 1080p (1920x1080)
-    # Without this, it often defaults to 640x480
-    cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1920)
-    cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 1080)
+    # # Optional: Set resolution to 1080p (1920x1080)
+    # # Without this, it often defaults to 640x480
+    # cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1920)
+    # cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 1080)
     
     # Optional: Set codec to MJPG for better framerate at high res
     cap.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*'MJPG'))
