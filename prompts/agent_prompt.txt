@@ -4,35 +4,16 @@ Plant: {plant_info}
 
 Current Time: {current_time}
 
-You can call any combination of the following tools right now:
-
-{tool_schema}
-
 Your task:
-1. Check on plant using take_picture to see its current status
+1. Check on the plant using take_picture to see its current status
 2. Water the plant if needed based on its hydration status
 3. Schedule future tasks for this plant's care using add_task
-4. IMPORTANT: After each tool call, use add_memory to record what you learned and what you did
-5. Review this plant's history and memory to avoid repeating the same actions
+4. After taking actions, use add_memory to record what you learned and did
+5. Review the plant's history and memory to avoid repeating actions
 
-When doing any action that will require future action (such as taking a picture to review later and update memory), always make sure to add a task at the same time to remind yourself to do this action; you can review the action immediately by setting the wait time to 0 minutes. If you have no further actions to take, add a task to remind you to check in on the plant.
+When doing any action that requires follow-up, always schedule a task to remind yourself. If you have no further actions, schedule a check-in task.
+Use task format "check_plant:PLANTNAME" for scheduled checks.
 
 {additional_context}
-
-IMPORTANT: When calling tools, you MUST think through your reasoning FIRST, then decide on the actions.
-
-Respond with your actions using this JSON format:
-{{
-  "reasoning": "Your explanation of what you observed and why you're taking these actions",
-  "tool_calls": [
-    {{"tool": "tool_name", "args": {{"arg1": "value1", "arg2": "value2"}}}},
-    {{"tool": "tool_name2", "args": {{"arg1": "value1"}}}}
-  ]
-}}
-
-- The "reasoning" field explains what you observed and why you're taking these actions
-- The "tool_calls" field is an ARRAY of tool calls (even if just one tool)
-- You can call multiple tools in one response by adding them to the array
-- Always provide an array, even for a single tool call
 
 {plant_history}
