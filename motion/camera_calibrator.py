@@ -5,27 +5,95 @@ The image is green for all x <= Qx and y <= Qy.
 """
 import numpy as np
 from PIL import Image, ImageDraw
-from camera import CameraTester
+from motion.camera import CameraTester, Camera
 from pathlib import Path
-from camera_calibrator_debug import CameraCalibratorDebug
+from motion.camera_calibrator_debug import CameraCalibratorDebug
+from typing import Tuple
+
+
+class CalibrationCameraWrapper:
+    """
+    Wrapper around Camera that scales all pixel movements by 4x for calibration.
+    This allows calibration to work with smaller pixel values while keeping
+    the actual camera operations at full resolution.
+    """
+    
+    CALIBRATION_SCALE = 4  # Scale down pixels by 4x for calibration
+    
+    def __init__(self, camera: Camera):
+        """Initialize wrapper with underlying camera."""
+        self.camera = camera
+    
+    def move_right(self, pixels: int = 1) -> Tuple[int, int]:
+        """Move right, scaling pixels by 4x."""
+        x, y = self.camera.move_right(pixels // self.CALIBRATION_SCALE)
+        return (x * self.CALIBRATION_SCALE, y * self.CALIBRATION_SCALE)
+    
+    def move_left(self, pixels: int = 1) -> Tuple[int, int]:
+        """Move left, scaling pixels by 4x."""
+        x, y = self.camera.move_left(pixels // self.CALIBRATION_SCALE)
+        return (x * self.CALIBRATION_SCALE, y * self.CALIBRATION_SCALE)
+    
+    def move_up(self, pixels: int = 1) -> Tuple[int, int]:
+        """Move up, scaling pixels by 4x."""
+        x, y = self.camera.move_up(pixels // self.CALIBRATION_SCALE)
+        return (x * self.CALIBRATION_SCALE, y * self.CALIBRATION_SCALE)
+    
+    def move_down(self, pixels: int = 1) -> Tuple[int, int]:
+        """Move down, scaling pixels by 4x."""
+        x, y = self.camera.move_down(pixels // self.CALIBRATION_SCALE)
+        return (x * self.CALIBRATION_SCALE, y * self.CALIBRATION_SCALE)
+    
+    def move(self, dx: int = 0, dy: int = 0) -> Tuple[int, int]:
+        """Move by delta, scaling pixels by 4x."""
+        x, y = self.camera.move(dx // self.CALIBRATION_SCALE, dy // self.CALIBRATION_SCALE)
+        return (x * self.CALIBRATION_SCALE, y * self.CALIBRATION_SCALE)
+    
+    def take_picture(self):
+        """Take picture - no scaling, returns full resolution."""
+        return self.camera.take_picture()
+    
+    def get_subimage(self):
+        """Get subimage - no scaling, returns full resolution."""
+        return self.camera.get_subimage()
+    
+    def get_position(self) -> Tuple[int, int]:
+        """Get position - scale UP by 4x to match calibration coordinates."""
+        x, y = self.camera.get_position()
+        return (x * self.CALIBRATION_SCALE, y * self.CALIBRATION_SCALE)
+    
+    def set_position(self, x: int, y: int) -> Tuple[int, int]:
+        """Set position - scale DOWN by 4x."""
+        return self.camera.set_position(x // self.CALIBRATION_SCALE, y // self.CALIBRATION_SCALE)
+    
+    @property
+    def subimage_width(self):
+        """Get subimage width - scale UP by 4x for calibration."""
+        return self.camera.subimage_width * self.CALIBRATION_SCALE
+    
+    @property
+    def subimage_height(self):
+        """Get subimage height - scale UP by 4x for calibration."""
+        return self.camera.subimage_height * self.CALIBRATION_SCALE
 
 
 class CameraCalibrator:
     """Calibrates camera position to find green region boundary."""
     
-    def __init__(self, camera: CameraTester,
+    def __init__(self, camera: Camera,
                  kernel_size: int = 13, test_jump: int = 20,
                  debug: bool = False):
         """
         Initialize the calibrator.
         
         Args:
-            camera: CameraTester instance to use for camera operations
+            camera: Camera instance to use for camera operations (will be wrapped for calibration scaling)
             kernel_size: Size of edge detection kernel (k x k) - should be 13 for the new kernel
-            test_jump: Number of pixels to jump when searching for initial bounds
+            test_jump: Number of pixels to jump when searching for initial bounds (will be scaled down by 4x)
             debug: If True, save debug images and print detailed information
         """
-        self.camera = camera
+        # Wrap camera to scale movements by 4x for calibration
+        self.camera = CalibrationCameraWrapper(camera)
         self.test_jump = test_jump
         self.debug = debug
         

@@ -18,7 +18,23 @@ from motion.camera import ActualCamera, Camera
 from motion.camera_calibrator import CameraCalibrator
 from utils.overshoot_ai import OvershootAIClient
 
-TOTAL_PLANTS = 1
+TOTAL_PLANTS = 12
+
+# Default plant positions in inches: (x, y) where x = inches from left, y = inches from top
+DEFAULT_PLANT_POSITIONS_INCHES = [
+    3, 3,    # Plant 0: (3, 3)
+    5, 7,    # Plant 1: (5, 7)
+    3, 12,   # Plant 2: (3, 12)
+    10, 2,   # Plant 3: (10, 2)
+    10, 7,   # Plant 4: (10, 7)
+    10, 12,  # Plant 5: (10, 12)
+    13, 2,   # Plant 6: (13, 2)
+    13, 7,   # Plant 7: (13, 7)
+    15, 12,  # Plant 8: (15, 12)
+    18, 4,   # Plant 9: (18, 4)
+    18, 13,  # Plant 10: (18, 13)
+    19, 13,  # Plant 11: (19, 13)
+]
 
 
 def update_plant_states(plants, hours_passed):
@@ -49,7 +65,7 @@ def main():
     parser.add_argument("--poke-ai-disable", action="store_true", help="Disable Poke AI integration")
     parser.add_argument("--initial-x-inches", type=float, default=0.0, help="Initial camera x position in inches")
     parser.add_argument("--initial-y-inches", type=float, default=0.0, help="Initial camera y position in inches")
-    parser.add_argument("--plant-positions", nargs="+", type=float, default=[], help="Plant positions in inches as x1,y1 x2,y2 ... (default: all at origin)")
+    parser.add_argument("--plant-positions", nargs="+", type=float, default=DEFAULT_PLANT_POSITIONS_INCHES, help="Plant positions in inches as x1 y1 x2 y2 ... (default: predefined positions)")
     parser.add_argument("--overshoot-api-key", default=None, help="Overshoot.ai API key (or set OVERSHOOT_AI_API_KEY env var)")
     parser.add_argument("--skip-calibration", action="store_true", help="Skip camera calibration")
     args = parser.parse_args()
