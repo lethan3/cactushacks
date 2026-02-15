@@ -27,7 +27,7 @@ class Plant(ABC):
         )["frequency_days"]
 
     @abstractmethod
-    def take_picture(self):
+    def take_picture(self, camera=None, overshoot_client=None):
         """Take a picture and return plant status as a dict, including hydration status."""
         pass
 
@@ -151,7 +151,7 @@ class VirtualPlant(Plant):
             return -(40 - self.hydration_level) / 40.0
         return 0.0
 
-    def take_picture(self):
+    def take_picture(self, camera=None, overshoot_client=None):
         """Take a picture and return plant status including hydration."""
         return self.format_observable_status()
 
