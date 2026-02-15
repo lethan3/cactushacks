@@ -6,9 +6,50 @@ Maintains current position (cx, cy) and allows movement in all directions.
 from PIL import Image
 from pathlib import Path
 from typing import Tuple, Optional
+from abc import ABC, abstractmethod
 
 
-class CameraTester:
+class Camera(ABC):
+    """Base camera class with movement and picture-taking capabilities."""
+    
+    @abstractmethod
+    def move_right(self, pixels: int = 1) -> Tuple[int, int]:
+        """
+        Move camera right (positive) or left (negative).
+        
+        Args:
+            pixels: Number of pixels to move (positive = right, negative = left)
+            
+        Returns:
+            New (x, y) position
+        """
+        pass
+    
+    @abstractmethod
+    def move_up(self, pixels: int = 1) -> Tuple[int, int]:
+        """
+        Move camera up (positive) or down (negative).
+        
+        Args:
+            pixels: Number of pixels to move (positive = up, negative = down)
+            
+        Returns:
+            New (x, y) position
+        """
+        pass
+    
+    @abstractmethod
+    def take_picture(self) -> Image.Image:
+        """
+        Take a picture with the camera.
+        
+        Returns:
+            PIL Image captured by the camera
+        """
+        pass
+
+
+class CameraTester(Camera):
     """Simulates a camera that can move and capture subimages from test_borders.png."""
     
     def __init__(self, image_path: str = "test_borders.png", 
@@ -67,6 +108,15 @@ class CameraTester:
         self.cy -= pixels  # Y increases downward, so up is negative
         self.cy = max(0, min(self.cy, self.image_height - 1))
         return (self.cx, self.cy)
+    
+    def take_picture(self) -> Image.Image:
+        """
+        Take a picture with the camera (returns subimage at current position).
+        
+        Returns:
+            PIL Image of the subimage
+        """
+        return self.get_subimage()
     
     def move_left(self, pixels: int = 1) -> Tuple[int, int]:
         """Move camera left. Convenience method for move_right(-pixels)."""
@@ -148,6 +198,22 @@ class CameraTester:
     
     def __repr__(self) -> str:
         return f"CameraTester(cx={self.cx}, cy={self.cy}, image_size={self.image_width}x{self.image_height})"
+
+
+class ActualCamera(Camera):
+    """Actual camera implementation (placeholder)."""
+    
+    def move_right(self, pixels: int = 1) -> Tuple[int, int]:
+        """Move camera right (positive) or left (negative)."""
+        pass
+    
+    def move_up(self, pixels: int = 1) -> Tuple[int, int]:
+        """Move camera up (positive) or down (negative)."""
+        pass
+    
+    def take_picture(self) -> Image.Image:
+        """Take a picture with the camera."""
+        pass
 
 
 if __name__ == "__main__":

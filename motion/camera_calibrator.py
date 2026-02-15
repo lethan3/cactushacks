@@ -5,30 +5,27 @@ The image is green for all x <= Qx and y <= Qy.
 """
 import numpy as np
 from PIL import Image, ImageDraw
-from camera_tester import CameraTester
+from camera import CameraTester
 from pathlib import Path
-from camera_calibrator_debug import CameraCalibratorDebugMixin
+from camera_calibrator_debug import CameraCalibratorDebug
 
 
-class CameraCalibrator(CameraCalibratorDebugMixin):
+class CameraCalibrator:
     """Calibrates camera position to find green region boundary."""
     
-    def __init__(self, image_path: str = "test_borders.png", 
-                 initial_x: int = 0, initial_y: int = 0,
+    def __init__(self, camera: CameraTester,
                  kernel_size: int = 13, test_jump: int = 20,
                  debug: bool = False):
         """
         Initialize the calibrator.
         
         Args:
-            image_path: Path to test image
-            initial_x: Initial x position
-            initial_y: Initial y position
+            camera: CameraTester instance to use for camera operations
             kernel_size: Size of edge detection kernel (k x k) - should be 13 for the new kernel
             test_jump: Number of pixels to jump when searching for initial bounds
             debug: If True, save debug images and print detailed information
         """
-        self.camera = CameraTester(image_path, initial_x, initial_y)
+        self.camera = camera
         self.test_jump = test_jump
         self.debug = debug
         
@@ -58,9 +55,14 @@ class CameraCalibrator(CameraCalibratorDebugMixin):
         self.horizontal_kernel = np.tile(column_vector.reshape(-1, 1), (1, self.kernel_size))
         
         self.debug_dir = Path("calibration_debug")
+        self.step_count = 0
+        
+        # Create debug helper only if debug is enabled
         if self.debug:
             self.debug_dir.mkdir(exist_ok=True)
-        self.step_count = 0
+            self.debug_helper = CameraCalibratorDebug(self)
+        else:
+            self.debug_helper = None
     
     def check_green(self, subimage: Image.Image, binsearch_value: bool = False, return_activations: bool = False, check_direction: str = "vertical") -> int | dict | tuple:
         """
@@ -252,7 +254,8 @@ class CameraCalibrator(CameraCalibratorDebugMixin):
         update_rel_x()
         subimage = self.camera.get_subimage()
         result = self.check_green(subimage, binsearch_value=True)
-        self.save_debug_image(subimage, f"find_qx_init_x{rel_x}_y{rel_y}")
+        if self.debug_helper:
+            self.debug_helper.save_debug_image(subimage, f"find_qx_init_x{rel_x}_y{rel_y}")
         
         # If we're already in green region, use current position as lo
         if result == 1 or result == 2:
@@ -264,7 +267,8 @@ class CameraCalibrator(CameraCalibratorDebugMixin):
                 update_rel_x()
                 subimage = self.camera.get_subimage()
                 result = self.check_green(subimage, binsearch_value=True)
-                self.save_debug_image(subimage, f"find_qx_init_x{rel_x}_y{rel_y}")
+                if self.debug_helper:
+                    self.debug_helper.save_debug_image(subimage, f"find_qx_init_x{rel_x}_y{rel_y}")
                 
                 # result == 1 (edge) or result == 2 (too much green) means we're in green region
                 if result == 1 or result == 2:
@@ -305,7 +309,8 @@ class CameraCalibrator(CameraCalibratorDebugMixin):
             
             subimage = self.camera.get_subimage()
             result = self.check_green(subimage, binsearch_value=True)
-            self.save_debug_image(subimage, f"find_qx_iter{iteration}_x{rel_x}_y{rel_y}")
+            if self.debug_helper:
+                self.debug_helper.save_debug_image(subimage, f"find_qx_iter{iteration}_x{rel_x}_y{rel_y}")
             
             print(f"  Iteration {iteration + 1}/10: x={rel_x}, result={result}, lo={lo}, hi={hi}")
             
@@ -353,7 +358,8 @@ class CameraCalibrator(CameraCalibratorDebugMixin):
         update_rel_y()
         subimage = self.camera.get_subimage()
         result = self.check_green(subimage, binsearch_value=True, check_direction="horizontal")
-        self.save_debug_image(subimage, f"find_qy_init_x{rel_x}_y{rel_y}")
+        if self.debug_helper:
+            self.debug_helper.save_debug_image(subimage, f"find_qy_init_x{rel_x}_y{rel_y}")
         
         # If we're already in green region, use current position as lo
         if result == 1 or result == 2:
@@ -365,7 +371,8 @@ class CameraCalibrator(CameraCalibratorDebugMixin):
                 update_rel_y()
                 subimage = self.camera.get_subimage()
                 result = self.check_green(subimage, binsearch_value=True, check_direction="horizontal")
-                self.save_debug_image(subimage, f"find_qy_init_x{rel_x}_y{rel_y}")
+                if self.debug_helper:
+                    self.debug_helper.save_debug_image(subimage, f"find_qy_init_x{rel_x}_y{rel_y}")
                 
                 # result == 1 (edge) or result == 2 (too much green) means we're in green region
                 if result == 1 or result == 2:
@@ -409,7 +416,8 @@ class CameraCalibrator(CameraCalibratorDebugMixin):
             
             subimage = self.camera.get_subimage()
             result = self.check_green(subimage, binsearch_value=True, check_direction="horizontal")
-            self.save_debug_image(subimage, f"find_qy_iter{iteration}_x{rel_x}_y{rel_y}")
+            if self.debug_helper:
+                self.debug_helper.save_debug_image(subimage, f"find_qy_iter{iteration}_x{rel_x}_y{rel_y}")
             
             print(f"  Iteration {iteration + 1}/10: y={rel_y}, result={result}, lo={lo}, hi={hi}")
             
@@ -468,7 +476,8 @@ class CameraCalibrator(CameraCalibratorDebugMixin):
                 update_rel()
                 subimage = self.camera.get_subimage()
                 result = self.check_green(subimage, binsearch_value=True)
-                self.save_debug_image(subimage, f"initial_move_find_green_x{rel_x}_y{rel_y}")
+                if self.debug_helper:
+                    self.debug_helper.save_debug_image(subimage, f"initial_move_find_green_x{rel_x}_y{rel_y}")
                 
                 if result != 0 and not found_green:
                     found_green = True
@@ -496,7 +505,8 @@ class CameraCalibrator(CameraCalibratorDebugMixin):
                 update_rel()
                 subimage = self.camera.get_subimage()
                 result = self.check_green(subimage, binsearch_value=True)
-                self.save_debug_image(subimage, f"initial_move_x{rel_x}_y{rel_y}")
+                if self.debug_helper:
+                    self.debug_helper.save_debug_image(subimage, f"initial_move_x{rel_x}_y{rel_y}")
                 
                 if result == 0:
                     print(f"  Exited green region at x={rel_x}, y={rel_y}")
@@ -525,10 +535,13 @@ class CameraCalibrator(CameraCalibratorDebugMixin):
 if __name__ == "__main__":
     import sys
     
-    calibrator = CameraCalibrator(
+    camera = CameraTester(
         image_path="test_borders.png",
         initial_x=0,
-        initial_y=0,
+        initial_y=0
+    )
+    calibrator = CameraCalibrator(
+        camera=camera,
         kernel_size=13,  # Must be 13 for the new kernel pattern
         test_jump=50,
         debug=False

@@ -6,8 +6,17 @@ import numpy as np
 from PIL import Image, ImageDraw
 
 
-class CameraCalibratorDebugMixin:
-    """Mixin class providing debug utilities for camera calibration."""
+class CameraCalibratorDebug:
+    """Debug helper class for camera calibration."""
+    
+    def __init__(self, calibrator):
+        """
+        Initialize debug helper.
+        
+        Args:
+            calibrator: CameraCalibrator instance to debug
+        """
+        self.calibrator = calibrator
     
     def save_debug_image(self, subimage: Image.Image, label: str):
         """
@@ -17,25 +26,23 @@ class CameraCalibratorDebugMixin:
             subimage: The subimage that was captured
             label: Label for the debug image filename
         """
-        if not self.debug:
-            return
-        
-        filename = f"step_{self.step_count:03d}_{label}.png"
-        filepath = self.debug_dir / filename
+        filename = f"step_{self.calibrator.step_count:03d}_{label}.png"
+        filepath = self.calibrator.debug_dir / filename
         
         # Load the full image
-        full_image = Image.open(self.camera.image_path).copy()
+        full_image = Image.open(self.calibrator.camera.image_path).copy()
         draw = ImageDraw.Draw(full_image)
         
         # Draw red rectangle around the subimage area
-        x1 = self.camera.cx
-        y1 = self.camera.cy
-        x2 = self.camera.cx + self.camera.subimage_width
-        y2 = self.camera.cy + self.camera.subimage_height
+        cx, cy = self.calibrator.camera.get_position()
+        x1 = cx
+        y1 = cy
+        x2 = cx + self.calibrator.camera.subimage_width
+        y2 = cy + self.calibrator.camera.subimage_height
         draw.rectangle([x1, y1, x2, y2], outline="red", width=3)
         
         # Get detailed detection results and kernel activations
-        detections, vertical_activations, horizontal_activations, check_result = self.check_green(
+        detections, vertical_activations, horizontal_activations, check_result = self.calibrator.check_green(
             subimage, binsearch_value=False, return_activations=True
         )
         
@@ -79,9 +86,8 @@ class CameraCalibratorDebugMixin:
         
         # Save the annotated full image
         full_image.save(filepath)
-        if self.debug:
-            print(f"  Saved debug image: {filepath} (red box at x={x1}, y={y1})")
-        self.step_count += 1
+        print(f"  Saved debug image: {filepath} (red box at x={x1}, y={y1})")
+        self.calibrator.step_count += 1
     
     def _save_activation_images(self, vertical_activations: np.ndarray, 
                                 horizontal_activations: np.ndarray, label: str):
@@ -93,9 +99,6 @@ class CameraCalibratorDebugMixin:
             horizontal_activations: 2D array of horizontal kernel convolution results
             label: Label for the debug image filename
         """
-        if not self.debug:
-            return
-        
         # Normalize activations to 0-255 range for visualization
         def normalize_activations(activations):
             # Use absolute value for visualization
@@ -161,14 +164,13 @@ class CameraCalibratorDebugMixin:
         horizontal_array = np.clip(horizontal_array, 0, 255).astype(np.uint8)
         
         # Save activation images
-        vertical_filename = f"step_{self.step_count:03d}_{label}_vertical_activations.png"
-        horizontal_filename = f"step_{self.step_count:03d}_{label}_horizontal_activations.png"
+        vertical_filename = f"step_{self.calibrator.step_count:03d}_{label}_vertical_activations.png"
+        horizontal_filename = f"step_{self.calibrator.step_count:03d}_{label}_horizontal_activations.png"
         
-        Image.fromarray(vertical_array).save(self.debug_dir / vertical_filename)
-        Image.fromarray(horizontal_array).save(self.debug_dir / horizontal_filename)
+        Image.fromarray(vertical_array).save(self.calibrator.debug_dir / vertical_filename)
+        Image.fromarray(horizontal_array).save(self.calibrator.debug_dir / horizontal_filename)
         
-        if self.debug:
-            print(f"  Saved activation images: {vertical_filename}, {horizontal_filename}")
+        print(f"  Saved activation images: {vertical_filename}, {horizontal_filename}")
     
     def sweep_image(self, step_size: int = 50, save_individual: bool = False) -> None:
         """
@@ -182,7 +184,7 @@ class CameraCalibratorDebugMixin:
         print("SWEEPING ENTIRE IMAGE")
         print("="*60)
         
-        image_width, image_height = self.camera.get_image_size()
+        image_width, image_height = self.calibrator.camera.get_image_size()
         print(f"Image size: {image_width} x {image_height}")
         print(f"Step size: {step_size}")
         print(f"Will check approximately {(image_width // step_size + 1) * (image_height // step_size + 1)} positions")
@@ -207,12 +209,12 @@ class CameraCalibratorDebugMixin:
             row_results = []
             row_positions = []
             for x in x_positions:
-                self.camera.set_position(x, y)
-                subimage = self.camera.get_subimage()
+                self.calibrator.camera.set_position(x, y)
+                subimage = self.calibrator.camera.get_subimage()
                 
                 # Get both binary and detailed results
-                result_binary = self.check_green(subimage, binsearch_value=True)
-                result_detailed = self.check_green(subimage, binsearch_value=False)
+                result_binary = self.calibrator.check_green(subimage, binsearch_value=True)
+                result_detailed = self.calibrator.check_green(subimage, binsearch_value=False)
                 
                 row_results.append({
                     'binary': result_binary,
@@ -282,7 +284,7 @@ class CameraCalibratorDebugMixin:
                 draw.rectangle([x, y, x + width, y + height], fill=color, outline='black', width=1)
         
         # Save summary image
-        summary_path = self.debug_dir / "sweep_summary.png"
+        summary_path = self.calibrator.debug_dir / "sweep_summary.png"
         summary_image.save(summary_path)
         print(f"  Summary visualization saved to: {summary_path}")
         
@@ -339,17 +341,17 @@ class CameraCalibratorDebugMixin:
         
         # Create and save heatmaps
         lr_heatmap = create_heatmap(lr_array, "L/R Edge Value", 'hot')
-        lr_path = self.debug_dir / "sweep_heatmap_lr.png"
+        lr_path = self.calibrator.debug_dir / "sweep_heatmap_lr.png"
         lr_heatmap.save(lr_path)
         print(f"  L/R edge heatmap saved to: {lr_path}")
         
         ud_heatmap = create_heatmap(ud_array, "U/D Edge Value", 'hot')
-        ud_path = self.debug_dir / "sweep_heatmap_ud.png"
+        ud_path = self.calibrator.debug_dir / "sweep_heatmap_ud.png"
         ud_heatmap.save(ud_path)
         print(f"  U/D edge heatmap saved to: {ud_path}")
         
         green_heatmap = create_heatmap(green_array, "Green Ratio", 'hot')
-        green_path = self.debug_dir / "sweep_heatmap_green.png"
+        green_path = self.calibrator.debug_dir / "sweep_heatmap_green.png"
         green_heatmap.save(green_path)
         print(f"  Green ratio heatmap saved to: {green_path}")
     
@@ -446,7 +448,7 @@ class CameraCalibratorDebugMixin:
         print("Running kernel convolution on full image...")
         
         # Load the full image
-        full_image = Image.open(self.camera.image_path)
+        full_image = Image.open(self.calibrator.camera.image_path)
         img_array = np.array(full_image, dtype=np.float32)
         height, width = img_array.shape[:2]
         
@@ -464,31 +466,31 @@ class CameraCalibratorDebugMixin:
         print("Running vertical kernel convolution...")
         try:
             from scipy import signal
-            vertical_result = signal.convolve2d(kernel_channel, self.vertical_kernel, mode='same')
+            vertical_result = signal.convolve2d(kernel_channel, self.calibrator.vertical_kernel, mode='same')
         except ImportError:
             # Manual convolution
-            pad_size = self.kernel_size // 2
+            pad_size = self.calibrator.kernel_size // 2
             padded = np.pad(kernel_channel, pad_size, mode='edge')
             vertical_result = np.zeros_like(kernel_channel)
             for i in range(height):
                 for j in range(width):
-                    region = padded[i:i+self.kernel_size, j:j+self.kernel_size]
-                    vertical_result[i, j] = np.sum(region * self.vertical_kernel)
+                    region = padded[i:i+self.calibrator.kernel_size, j:j+self.calibrator.kernel_size]
+                    vertical_result[i, j] = np.sum(region * self.calibrator.vertical_kernel)
         
         # Run horizontal kernel convolution
         print("Running horizontal kernel convolution...")
         try:
             from scipy import signal
-            horizontal_result = signal.convolve2d(kernel_channel, self.horizontal_kernel, mode='same')
+            horizontal_result = signal.convolve2d(kernel_channel, self.calibrator.horizontal_kernel, mode='same')
         except ImportError:
             # Manual convolution
-            pad_size = self.kernel_size // 2
+            pad_size = self.calibrator.kernel_size // 2
             padded = np.pad(kernel_channel, pad_size, mode='edge')
             horizontal_result = np.zeros_like(kernel_channel)
             for i in range(height):
                 for j in range(width):
-                    region = padded[i:i+self.kernel_size, j:j+self.kernel_size]
-                    horizontal_result[i, j] = np.sum(region * self.horizontal_kernel)
+                    region = padded[i:i+self.calibrator.kernel_size, j:j+self.calibrator.kernel_size]
+                    horizontal_result[i, j] = np.sum(region * self.calibrator.horizontal_kernel)
         
         # Save activation images
         # Binary visualization: white if intensity >= 100, black otherwise
@@ -514,12 +516,12 @@ class CameraCalibratorDebugMixin:
         vertical_filename = f"{output_prefix}_vertical_activations.png"
         horizontal_filename = f"{output_prefix}_horizontal_activations.png"
         
-        Image.fromarray(vertical_array).save(self.debug_dir / vertical_filename)
-        Image.fromarray(horizontal_array).save(self.debug_dir / horizontal_filename)
+        Image.fromarray(vertical_array).save(self.calibrator.debug_dir / vertical_filename)
+        Image.fromarray(horizontal_array).save(self.calibrator.debug_dir / horizontal_filename)
         
         print(f"Saved activation images:")
-        print(f"  Vertical: {self.debug_dir}/{vertical_filename}")
-        print(f"  Horizontal: {self.debug_dir}/{horizontal_filename}")
+        print(f"  Vertical: {self.calibrator.debug_dir}/{vertical_filename}")
+        print(f"  Horizontal: {self.calibrator.debug_dir}/{horizontal_filename}")
         
         # Create intensity distribution histograms
         self._create_intensity_histograms(vertical_result, horizontal_result, output_prefix)
@@ -594,11 +596,11 @@ class CameraCalibratorDebugMixin:
         
         # Save histogram
         histogram_filename = f"{output_prefix}_intensity_histograms.png"
-        histogram_path = self.debug_dir / histogram_filename
+        histogram_path = self.calibrator.debug_dir / histogram_filename
         plt.savefig(histogram_path, dpi=150, bbox_inches='tight')
         plt.close()
         
-        print(f"  Intensity histograms: {self.debug_dir}/{histogram_filename}")
+        print(f"  Intensity histograms: {self.calibrator.debug_dir}/{histogram_filename}")
         
         # Print statistics
         print(f"\nIntensity Statistics:")
@@ -653,7 +655,7 @@ class CameraCalibratorDebugMixin:
         
         # Save visualization
         green_filename = f"{output_prefix}_green_pixels.png"
-        green_path = self.debug_dir / green_filename
+        green_path = self.calibrator.debug_dir / green_filename
         Image.fromarray(green_array).save(green_path)
         
         # Calculate statistics
@@ -662,6 +664,6 @@ class CameraCalibratorDebugMixin:
         green_ratio = green_pixels / total_pixels
         
         print(f"Saved green pixel detection visualization:")
-        print(f"  {self.debug_dir}/{green_filename}")
+        print(f"  {self.calibrator.debug_dir}/{green_filename}")
         print(f"  Green pixels: {green_pixels}/{total_pixels} ({green_ratio*100:.2f}%)")
         print(f"  Threshold: green / (red + blue) >= {green_pixel_threshold}")
