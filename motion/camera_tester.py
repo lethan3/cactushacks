@@ -28,6 +28,10 @@ class CameraTester:
         self.image = Image.open(self.image_path)
         self.image_width, self.image_height = self.image.size
         
+        # Subimages scaled down by 4x (was 200x200, now 50x50)
+        self.subimage_width = 50
+        self.subimage_height = 50
+        
         # Current camera position (upper-left corner of viewport)
         self.cx = initial_x
         self.cy = initial_y
@@ -108,35 +112,31 @@ class CameraTester:
         """Get current camera position."""
         return (self.cx, self.cy)
     
-    def get_subimage(self, width: int, height: int) -> Image.Image:
+    def get_subimage(self) -> Image.Image:
         """
-        Get a subimage of the specified size with upper-left corner at (cx, cy).
+        Get a subimage using self.subimage_width and self.subimage_height with upper-left corner at (cx, cy).
         
-        Args:
-            width: Width of the subimage
-            height: Height of the subimage
-            
         Returns:
             PIL Image of the subimage (may be smaller if near image edges)
         """
         # Calculate bounds
         x1 = self.cx
         y1 = self.cy
-        x2 = min(self.cx + width, self.image_width)
-        y2 = min(self.cy + height, self.image_height)
+        x2 = min(self.cx + self.subimage_width, self.image_width)
+        y2 = min(self.cy + self.subimage_height, self.image_height)
         
         # Ensure we have valid bounds
         if x2 <= x1 or y2 <= y1:
             # Return a blank image if invalid
-            return Image.new('RGB', (width, height), color='black')
+            return Image.new('RGB', (self.subimage_width, self.subimage_height), color='black')
         
         # Crop the image
         box = (x1, y1, x2, y2)
         subimage = self.image.crop(box)
         
         # If the subimage is smaller than requested (near edges), pad it
-        if subimage.size[0] < width or subimage.size[1] < height:
-            padded = Image.new(self.image.mode, (width, height), color='black')
+        if subimage.size[0] < self.subimage_width or subimage.size[1] < self.subimage_height:
+            padded = Image.new(self.image.mode, (self.subimage_width, self.subimage_height), color='black')
             padded.paste(subimage, (0, 0))
             return padded
         
@@ -162,8 +162,8 @@ if __name__ == "__main__":
     print()
     
     # Get a subimage
-    print("Getting 200x200 subimage at (0, 0)...")
-    subimage = camera.get_subimage(200, 200)
+    print("Getting subimage at (0, 0)...")
+    subimage = camera.get_subimage()
     print(f"Subimage size: {subimage.size}")
     subimage.save("test_subimage_initial.png")
     print("Saved to test_subimage_initial.png")
@@ -173,7 +173,7 @@ if __name__ == "__main__":
     print("Moving right by 100 pixels...")
     camera.move_right(100)
     print(f"New position: {camera.get_position()}")
-    subimage = camera.get_subimage(200, 200)
+    subimage = camera.get_subimage()
     subimage.save("test_subimage_right.png")
     print("Saved to test_subimage_right.png")
     print()
@@ -182,7 +182,7 @@ if __name__ == "__main__":
     print("Moving up by 50 pixels...")
     camera.move_up(50)
     print(f"New position: {camera.get_position()}")
-    subimage = camera.get_subimage(200, 200)
+    subimage = camera.get_subimage()
     subimage.save("test_subimage_up.png")
     print("Saved to test_subimage_up.png")
     print()
@@ -199,19 +199,11 @@ if __name__ == "__main__":
     print(f"New position: {camera.get_position()}")
     print()
     
-    # Test with different subimage size
-    print("Getting 400x300 subimage...")
-    subimage = camera.get_subimage(400, 300)
-    print(f"Subimage size: {subimage.size}")
-    subimage.save("test_subimage_large.png")
-    print("Saved to test_subimage_large.png")
-    print()
-    
     # Test near edge
     print("Moving to near bottom-right corner...")
     camera.set_position(1500, 800)
     print(f"Position: {camera.get_position()}")
-    subimage = camera.get_subimage(200, 200)
+    subimage = camera.get_subimage()
     print(f"Subimage size (may be smaller near edge): {subimage.size}")
     subimage.save("test_subimage_edge.png")
     print("Saved to test_subimage_edge.png")
