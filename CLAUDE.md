@@ -1,0 +1,1 @@
+Keep the code style simple, hackable, not overly-engineered, functional, emphasis on the operations rather than the abstractions, concise vars. max clarity and simplicity.
