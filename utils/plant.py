@@ -151,8 +151,9 @@ class VirtualPlant(Plant):
             return -(40 - self.hydration_level) / 40.0
         return 0.0
 
-    def take_picture(self):
+    def take_picture(self, camera=None, overshoot_client=None):
         """Take a picture and return plant status including hydration."""
+        # VirtualPlant doesn't use camera or overshoot_client, but accepts them for compatibility
         return self.format_observable_status()
 
     def water(self, quantity):
@@ -251,7 +252,13 @@ class ActualPlant(Plant):
             
             # Take picture at plant's position
             image = camera.take_picture()
-            # Analyze image using overshoot.ai
+            
+            # Only call OpenAI API if image was successfully produced
+            if image is None:
+                print(f"Warning: No image produced for {self.name}, using fallback status")
+                return self.format_observable_status()
+            
+            # Analyze image using OpenAI Vision API
             result = overshoot_client.analyze_plant_image(image, self.name, self.species)
             return result
         except Exception as e:

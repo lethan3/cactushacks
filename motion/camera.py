@@ -7,6 +7,16 @@ from PIL import Image
 from pathlib import Path
 from typing import Tuple, Optional
 from abc import ABC, abstractmethod
+import subprocess
+import time
+
+# Try to import Jetson GPIO, but allow fallback if not available
+try:
+    import Jetson.GPIO as GPIO
+    GPIO_AVAILABLE = True
+except ImportError:
+    GPIO_AVAILABLE = False
+    GPIO = None
 
 
 class Camera(ABC):
@@ -20,8 +30,8 @@ class Camera(ABC):
     # Calculated as: (10/4 * 0.957) inches / 1185 pixels = 2.3925 / 1185
     INCH_PER_PIXEL_OF_WIDTH = (10 / 4 * 0.957) / 1185
     
-    # Velocity constant: 2 inches per second
-    VELOCITY_INCHES_PER_SEC = 2.0
+    # Velocity constant: 1.9/3 inches per second
+    VELOCITY_INCHES_PER_SEC = 1.9 / 3.0
     
     @abstractmethod
     def move_right(self, pixels: int = 1) -> Tuple[int, int]:
@@ -212,10 +222,18 @@ class CameraTester(Camera):
 
 
 class ActualCamera(Camera):
-    """Actual camera implementation (placeholder)."""
+    """Actual camera implementation with motor control."""
     
     # Camera device index (only one camera used for entire harness)
     CAMERA_INDEX = 1
+    
+    # GPIO Pin assignments (BOARD numbering)
+    X_EN = 11   # Motor X Enable (pin 112, PR.04) → Arduino D3
+    X_DIR = 13   # Motor X Direction (pin 122, PY.00) → Arduino D5
+    Y_EN = 7    # Motor Y Enable (pin 144, PAC.06) → Arduino D4
+    Y_DIR = 31  # Motor Y Direction (pin 106, PQ.06) → Arduino D6
+    
+    ALL_PINS = [X_EN, X_DIR, Y_EN, Y_DIR]
     
     def __init__(self):
         """
@@ -233,28 +251,112 @@ class ActualCamera(Camera):
         # Track current position (for compatibility with CameraTester interface)
         self.cx = 0
         self.cy = 0
+        
+        # Initialize GPIO for motor control
+        self._gpio_initialized = False
+        if GPIO_AVAILABLE:
+            self._init_gpio()
+        else:
+            print("Warning: Jetson.GPIO not available. Motor control will be disabled.")
+    
+    def _init_gpio(self):
+        """Initialize GPIO pins for motor control."""
+        try:
+            # Kill any leftover background gpioset holding motor pins
+            subprocess.run(
+                ["pkill", "-f", r"gpioset.*gpiochip0.*(112|122|144|106)="],
+                check=False,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+            
+            GPIO.setmode(GPIO.BOARD)
+            GPIO.setwarnings(False)
+            for pin in self.ALL_PINS:
+                GPIO.setup(pin, GPIO.OUT, initial=GPIO.LOW)
+            
+            self._gpio_initialized = True
+        except Exception as e:
+            print(f"Warning: Failed to initialize GPIO: {e}")
+            self._gpio_initialized = False
+    
+    def _all_pins_low(self):
+        """Drive all motor pins LOW - motors off."""
+        if not self._gpio_initialized:
+            return
+        try:
+            for pin in self.ALL_PINS:
+                GPIO.output(pin, GPIO.LOW)
+        except Exception as e:
+            print(f"Warning: Failed to set pins LOW: {e}")
+    
+    def get_image_size(self) -> Tuple[int, int]:
+        """Get the size of the camera image (width, height)."""
+        return (self.width, self.height)
     
     def run_motor_horiz(self, direction: int, duration: float):
         """
         Run horizontal motor.
         
         Args:
-            direction: 1 for right, -1 for left
+            direction: 1 for right (forward), -1 for left (reverse)
             duration: Duration in seconds
         """
-        # TODO: Implement actual motor control
-        pass
+        if not self._gpio_initialized:
+            print(f"Motor control disabled: X motor would move {'right' if direction > 0 else 'left'} for {duration:.3f}s")
+            time.sleep(duration)  # Simulate movement time
+            return
+        
+        try:
+            # Turn off all motors first
+            self._all_pins_low()
+            
+            # Set direction: HIGH for forward (right), LOW for reverse (left)
+            GPIO.output(self.X_DIR, GPIO.HIGH if direction > 0 else GPIO.LOW)
+            
+            # Enable motor
+            GPIO.output(self.X_EN, GPIO.HIGH)
+            
+            # Run for specified duration
+            time.sleep(duration)
+            
+            # Turn off motor
+            GPIO.output(self.X_EN, GPIO.LOW)
+        except Exception as e:
+            print(f"Error controlling horizontal motor: {e}")
+            self._all_pins_low()
     
     def run_motor_vert(self, direction: int, duration: float):
         """
         Run vertical motor.
         
         Args:
-            direction: 1 for up, -1 for down
+            direction: 1 for up (forward), -1 for down (reverse)
             duration: Duration in seconds
         """
-        # TODO: Implement actual motor control
-        pass
+        if not self._gpio_initialized:
+            print(f"Motor control disabled: Y motor would move {'up' if direction > 0 else 'down'} for {duration:.3f}s")
+            time.sleep(duration)  # Simulate movement time
+            return
+        
+        try:
+            # Turn off all motors first
+            self._all_pins_low()
+            
+            # Set direction: HIGH for forward (up), LOW for reverse (down)
+            GPIO.output(self.Y_DIR, GPIO.HIGH if direction > 0 else GPIO.LOW)
+            
+            # Enable motor
+            GPIO.output(self.Y_EN, GPIO.HIGH)
+            
+            # Run for specified duration
+            time.sleep(duration)
+            
+            # Turn off motor
+            GPIO.output(self.Y_EN, GPIO.LOW)
+        except Exception as e:
+            print(f"Error controlling vertical motor: {e}")
+            self._all_pins_low()
     
     def move_right(self, pixels: int = 1) -> Tuple[int, int]:
         """
@@ -410,6 +512,54 @@ class ActualCamera(Camera):
         return Image.fromarray(frame_rgb)
     
     def release(self):
+        """
+        Release camera resources and clean up GPIO.
+        Sets all motor pins LOW and uses gpioset daemon to hold them LOW.
+        """
+        # Release camera capture
+        if self.cap is not None:
+            self.cap.release()
+            self.cap = None
+        
+        # Clean up GPIO
+        if self._gpio_initialized:
+            try:
+                # Drive all pins LOW while we still hold GPIO lines
+                self._all_pins_low()
+                time.sleep(0.1)
+                
+                # Release Jetson.GPIO's hold
+                GPIO.cleanup()
+                
+                # Immediately grab lines with gpioset daemon to HOLD them in GPIO mode at LOW.
+                # Without this, pins revert to peripheral functions on fd close:
+                #   pin 11 → UART RTS (idles 3.3V) → Arduino reads enable HIGH → motor runs.
+                #
+                # CRITICAL: Only kill gpioset daemons for OUR pins (112, 122, 144, 106).
+                # Other scripts may have their own gpioset daemons holding other pins at LOW.
+                subprocess.run(
+                    ['pkill', '-f', r'gpioset.*gpiochip0.*(112|122|144|106)='],
+                    check=False,
+                    stderr=subprocess.DEVNULL,
+                )
+                time.sleep(0.05)
+                
+                # Start gpioset daemon to hold pins LOW
+                proc = subprocess.Popen(
+                    ['gpioset', '--mode=signal', '--background', 'gpiochip0',
+                     '112=0', '122=0', '144=0', '106=0'],
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                )
+                print(f"Motor pins LOW — held by gpioset daemon (pid {proc.pid})")
+                
+                self._gpio_initialized = False
+            except Exception as e:
+                print(f"Warning: Error during GPIO cleanup: {e}")
+    
+    def release_camera(self):
+        """Alias for release() for compatibility."""
+        self.release()
         """Release the camera resource."""
         if self.cap is not None:
             self.cap.release()

@@ -18,7 +18,8 @@ from motion.camera import ActualCamera, Camera
 from motion.camera_calibrator import CameraCalibrator
 from utils.overshoot_ai import OvershootAIClient
 
-TOTAL_PLANTS = 12
+# Default number of plants (can be overridden via --num-plants argument)
+DEFAULT_NUM_PLANTS = 12
 
 # Default plant positions in inches: (x, y) where x = inches from left, y = inches from top
 DEFAULT_PLANT_POSITIONS_INCHES = [
@@ -66,42 +67,55 @@ def main():
     parser.add_argument("--initial-x-inches", type=float, default=0.0, help="Initial camera x position in inches")
     parser.add_argument("--initial-y-inches", type=float, default=0.0, help="Initial camera y position in inches")
     parser.add_argument("--plant-positions", nargs="+", type=float, default=DEFAULT_PLANT_POSITIONS_INCHES, help="Plant positions in inches as x1 y1 x2 y2 ... (default: predefined positions)")
+    parser.add_argument("--plant-type", choices=["virtual", "actual"], default="virtual", help="Type of plants to use (default: virtual)")
+    parser.add_argument("--num-plants", type=int, default=DEFAULT_NUM_PLANTS, help=f"Number of plants to create (default: {DEFAULT_NUM_PLANTS})")
     parser.add_argument("--overshoot-api-key", default=None, help="Overshoot.ai API key (or set OVERSHOOT_AI_API_KEY env var)")
     parser.add_argument("--skip-calibration", action="store_true", help="Skip camera calibration")
     args = parser.parse_args()
 
-    # Initialize camera at the very beginning
-    camera = ActualCamera()
+    # Initialize camera only for actual plants
+    camera = None
+    initial_x_pixels = 0
+    initial_y_pixels = 0
     
-    # Convert initial camera position from inches to pixels
-    initial_x_pixels = int(args.initial_x_inches / Camera.INCH_PER_PIXEL_OF_WIDTH)
-    initial_y_pixels = int(args.initial_y_inches / Camera.INCH_PER_PIXEL_OF_WIDTH)
+    if args.plant_type == "actual":
+        # For actual plants, use 5-second time steps in real-time mode
+        args.time_step = 5 / 60.0  # 5 seconds = 5/60 minutes
+        args.real_time = True
+        print("Note: Using actual plants - time step set to 5 seconds with real-time mode enabled")
+        
+        # Initialize camera at the very beginning
+        camera = ActualCamera()
+        
+        # Convert initial camera position from inches to pixels
+        initial_x_pixels = int(args.initial_x_inches / Camera.INCH_PER_PIXEL_OF_WIDTH)
+        initial_y_pixels = int(args.initial_y_inches / Camera.INCH_PER_PIXEL_OF_WIDTH)
+        
+        # Call calibrate on the camera at the very beginning
+        if not args.skip_calibration:
+            try:
+                print("Calibrating camera...")
+                calibrator = CameraCalibrator(camera, debug=False)
+                qx, qy = calibrator.calibrate()
+                print(f"Camera calibration complete: Qx={qx}, Qy={qy}")
+                # Force set camera cx and cy to 0 to synchronize position tracking
+                camera.cx = 0
+                camera.cy = 0
+                print("Camera position reset to (0, 0) after calibration")
+            except Exception as e:
+                print(f"Warning: Camera calibration failed: {e}")
+                print("Continuing without calibration...")
+                # Still reset position even if calibration failed
+                camera.cx = 0
+                camera.cy = 0
     
-    # Initialize Overshoot.ai client
+    # Initialize Overshoot.ai client (only needed for actual plants, but initialize anyway)
     try:
         overshoot_client = OvershootAIClient(api_key=args.overshoot_api_key)
         print("Overshoot.ai client initialized")
     except Exception as e:
         print(f"Warning: Could not initialize Overshoot.ai client: {e}")
         overshoot_client = None
-    
-    # Call calibrate on the camera at the very beginning
-    if not args.skip_calibration:
-        try:
-            print("Calibrating camera...")
-            calibrator = CameraCalibrator(camera, debug=False)
-            qx, qy = calibrator.calibrate()
-            print(f"Camera calibration complete: Qx={qx}, Qy={qy}")
-            # Force set camera cx and cy to 0 to synchronize position tracking
-            camera.cx = 0
-            camera.cy = 0
-            print("Camera position reset to (0, 0) after calibration")
-        except Exception as e:
-            print(f"Warning: Camera calibration failed: {e}")
-            print("Continuing without calibration...")
-            # Still reset position even if calibration failed
-            camera.cx = 0
-            camera.cy = 0
     
     clock = SimulatedClock(time_step_minutes=args.time_step)
     task_queue = TaskQueue()
@@ -120,17 +134,21 @@ def main():
             y_pixels = int(y_inches / Camera.INCH_PER_PIXEL_OF_WIDTH)
             plant_positions.append((x_pixels, y_pixels))
     
-    # Create plants with positions in pixels
+    # Create plants based on selected type
+    total_plants = args.num_plants
     plants = []
-    for i in range(TOTAL_PLANTS):
-        if i < len(plant_positions):
-            pos_x, pos_y = plant_positions[i]
-        else:
-            # Default to origin if not specified
-            pos_x, pos_y = 0, 0
-        plants.append(ActualPlant(f"Cactus{i+1}", "cactus", i, pos_x=pos_x, pos_y=pos_y))
+    for i in range(total_plants):
+        if args.plant_type == "virtual":
+            plants.append(VirtualPlant(f"Cactus{i+1}", "cactus", i))
+        else:  # actual
+            if i < len(plant_positions):
+                pos_x, pos_y = plant_positions[i]
+            else:
+                # Default to origin if not specified
+                pos_x, pos_y = 0, 0
+            plants.append(ActualPlant(f"Cactus{i+1}", "cactus", i, pos_x=pos_x, pos_y=pos_y))
     
-    assert len(plants) == TOTAL_PLANTS, f"Expected {TOTAL_PLANTS} plants, got {len(plants)}"
+    assert len(plants) == total_plants, f"Expected {total_plants} plants, got {len(plants)}"
 
     agent = PlantCareAgent(
         model=args.model,
@@ -160,8 +178,12 @@ def main():
     print("=" * 60)
     print(f"Model: {args.model}")
     print(f"Time step: {args.time_step} minutes")
-    print(f"Camera initialized at: ({args.initial_x_inches:.2f}\", {args.initial_y_inches:.2f}\") = ({initial_x_pixels}px, {initial_y_pixels}px)")
-    print(f"Total Plants: {TOTAL_PLANTS}")
+    if camera is not None:
+        print(f"Camera initialized at: ({args.initial_x_inches:.2f}\", {args.initial_y_inches:.2f}\") = ({initial_x_pixels}px, {initial_y_pixels}px)")
+    else:
+        print("Camera: Not initialized (using virtual plants)")
+    print(f"Plant Type: {args.plant_type}")
+    print(f"Total Plants: {total_plants}")
     for plant in plants:
         if isinstance(plant, ActualPlant):
             x_inches = plant.pos_x * Camera.INCH_PER_PIXEL_OF_WIDTH
@@ -228,10 +250,11 @@ def main():
         camera = getattr(agent, 'camera', None)
         overshoot_client = getattr(agent, 'overshoot_client', None)
         for plant in plants:
-            # Navigate camera to plant position before taking picture
+            # Navigate camera to plant position before taking picture (only for ActualPlant)
             if camera and isinstance(plant, ActualPlant):
                 current_x, current_y = camera.get_position()
                 plant.navigate_to_plant(camera, current_x, current_y)
+            
             status = plant.take_picture(camera=camera, overshoot_client=overshoot_client)
             if isinstance(plant, VirtualPlant):
                 health = plant.get_health_score()
@@ -268,11 +291,12 @@ def main():
     if log_file:
         print(f"Full log available at: {log_file}")
     
-    # Clean up camera
-    try:
-        camera.release()
-    except:
-        pass
+    # Clean up camera (only if it was initialized)
+    if camera is not None:
+        try:
+            camera.release()
+        except:
+            pass
 
 
 if __name__ == "__main__":

@@ -75,6 +75,10 @@ class CalibrationCameraWrapper:
     def subimage_height(self):
         """Get subimage height - scale UP by 4x for calibration."""
         return self.camera.subimage_height * self.CALIBRATION_SCALE
+    
+    def get_image_size(self) -> Tuple[int, int]:
+        """Get image size - delegate to underlying camera."""
+        return self.camera.get_image_size()
 
 
 class CameraCalibrator:
