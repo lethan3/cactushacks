@@ -28,17 +28,12 @@ class Plant(ABC):
 
     @abstractmethod
     def take_picture(self):
-        """Return plant status as a dict."""
+        """Take a picture and return plant status as a dict, including hydration status."""
         pass
 
     @abstractmethod
     def water(self, quantity):
         """Water the plant with given quantity (cups)."""
-        pass
-
-    @abstractmethod
-    def get_hydration_status(self):
-        """0.0 = good, positive = overhydrated, negative = underhydrated."""
         pass
 
     def add_memory(self, memory):
@@ -83,9 +78,13 @@ class Plant(ABC):
             return -(avg - ideal) / ideal
         return 0.0
 
-    def _hydration_label(self):
+    def _get_hydration_status(self):
+        """Internal method to get hydration status. Should be implemented by subclasses."""
+        # This will be overridden by subclasses
+        raise NotImplementedError("Subclasses must implement _get_hydration_status()")
+
+    def _hydration_label(self, h):
         """Human-readable hydration label from deviation score."""
-        h = self.get_hydration_status()
         if h > 0.5:
             return "overwatered"
         elif h > 0.1:
@@ -96,9 +95,8 @@ class Plant(ABC):
             return "slightly dry"
         return "good"
 
-    def _recommended_action(self):
+    def _recommended_action(self, h):
         """What a sensor/VLM assessment would recommend."""
-        h = self.get_hydration_status()
         care = self.SPECIES_CARE.get(self.species.lower(), {"water_quantity": 1.0, "frequency_days": 7})
         if h < -0.3:
             return f"water with {care['water_quantity']} cups — check again in 6 hours to verify recovery"
@@ -111,15 +109,15 @@ class Plant(ABC):
         return "no action needed — plant is healthy"
 
     def format_observable_status(self):
-        """What a camera/VLM would see — observable values only."""
+        """What a camera/VLM would see — observable values only. Includes hydration status."""
         care = self.SPECIES_CARE.get(self.species.lower(), {"water_quantity": 1.0, "frequency_days": 7})
-        h = round(self.get_hydration_status(), 2)
+        h = round(self._get_hydration_status(), 2)
         return {
             "name": self.name,
             "species": self.species,
-            "hydration": self._hydration_label(),
+            "hydration": self._hydration_label(h),
             "hydration_deviation": h,
-            "recommended_action": self._recommended_action(),
+            "recommended_action": self._recommended_action(h),
             "water_frequency_status": round(self.get_water_frequency_status(), 2),
             "last_watering": self.last_watering.isoformat() if self.last_watering else None,
             "watering_count": len(self.watering_history),
@@ -145,7 +143,8 @@ class VirtualPlant(Plant):
         self.created_at = datetime.now()
         self.hydration_decay_rate = random.uniform(0.5, 2.0)
 
-    def get_hydration_status(self):
+    def _get_hydration_status(self):
+        """Calculate hydration status from internal state."""
         if self.hydration_level > 80:
             return (self.hydration_level - 80) / 20.0
         elif self.hydration_level < 40:
@@ -153,6 +152,7 @@ class VirtualPlant(Plant):
         return 0.0
 
     def take_picture(self):
+        """Take a picture and return plant status including hydration."""
         return self.format_observable_status()
 
     def water(self, quantity):
@@ -187,14 +187,49 @@ class VirtualPlant(Plant):
 class ActualPlant(Plant):
     """Placeholder for actual plant with real hardware."""
 
-    def __init__(self, name, species, index):
+    def __init__(self, name, species, index, pos_x: int = 0, pos_y: int = 0):
+        """
+        Initialize actual plant.
+        
+        Args:
+            name: Plant name
+            species: Plant species
+            index: Plant index
+            pos_x: X position of the plant
+            pos_y: Y position of the plant
+        """
         super().__init__(name, species, index)
-        # TODO: Initialize camera and watering device connections
+        self.pos_x = pos_x
+        self.pos_y = pos_y
+        # TODO: Initialize watering device connections
 
-    def get_hydration_status(self):
-        raise NotImplementedError("ActualPlant.get_hydration_status() not yet implemented")
+    def navigate_to_plant(self, camera, current_x: int, current_y: int):
+        """
+        Navigate the camera to the plant's position.
+        
+        Args:
+            camera: Camera object from motion.camera (must have move() method)
+            current_x: Current x position of the camera
+            current_y: Current y position of the camera
+        
+        Note: camera.move() uses cy -= dy, so positive dy moves up, negative dy moves down.
+        """
+        # Calculate delta to move to plant position
+        dx = self.pos_x - current_x
+        # For y: camera.move() uses cy -= dy, so to move down (increase cy), we need negative dy
+        # To move from current_y to pos_y:
+        # - If pos_y > current_y (move down), we need negative dy: dy = current_y - pos_y
+        # - If pos_y < current_y (move up), we need positive dy: dy = current_y - pos_y
+        dy = current_y - self.pos_y
+        camera.move(dx, dy)
+
+    def _get_hydration_status(self):
+        """Get hydration status from camera/VLM analysis."""
+        # TODO: Call camera/VLM to analyze image and extract hydration status
+        raise NotImplementedError("ActualPlant._get_hydration_status() not yet implemented")
 
     def take_picture(self):
+        """Take a picture and return plant status including hydration."""
         # TODO: Call camera/VLM to analyze image
         return self.format_observable_status()
 

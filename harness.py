@@ -29,7 +29,7 @@ def print_tool_results(tool_results):
 
 def main():
     parser = argparse.ArgumentParser(description="Plant Care AI Agent Harness")
-    parser.add_argument("--model", default="llama3.2", help="Ollama model to use")
+    parser.add_argument("--model", default="qwen3:4b-instruct-2507-q4_K_M", help="Ollama model to use")
     parser.add_argument("--host", default="http://localhost:11434", help="Ollama host URL")
     parser.add_argument("--timeout", type=int, default=120, help="Timeout for Ollama API calls")
     parser.add_argument("--time-step", type=int, default=30, help="Time step in minutes")
