@@ -37,7 +37,8 @@ class OvershootAIClient:
             "Content-Type": "application/json"
         }
     
-    def analyze_plant_image(self, image: Image.Image, plant_name: str, plant_species: str) -> Dict:
+    def analyze_plant_image(self, image: Image.Image, plant_name: str, plant_species: str,
+                            sensor_readings: Optional[Dict] = None) -> Dict:
         """
         Analyze a plant image using OpenAI Vision API.
         
@@ -45,6 +46,7 @@ class OvershootAIClient:
             image: PIL Image of the plant
             plant_name: Name of the plant
             plant_species: Species of the plant
+            sensor_readings: Optional dict of sensor readings (e.g. temperature_f, soil_moisture_pct)
             
         Returns:
             Dictionary with plant status information matching format_observable_status format
@@ -63,10 +65,21 @@ class OvershootAIClient:
         image.save(buffered, format="JPEG", quality=90)
         image_base64 = base64.b64encode(buffered.getvalue()).decode('utf-8')
         
+        # Build sensor context string
+        sensor_context = ""
+        if sensor_readings:
+            sensor_lines = []
+            if sensor_readings.get("temperature_f") is not None:
+                sensor_lines.append(f"- Ambient temperature: {sensor_readings['temperature_f']:.1f} °F")
+            if sensor_readings.get("soil_moisture_pct") is not None:
+                sensor_lines.append(f"- Soil moisture: {sensor_readings['soil_moisture_pct']:.1f}%")
+            if sensor_lines:
+                sensor_context = "\n\nSensor readings:\n" + "\n".join(sensor_lines)
+        
         # Create prompt for plant analysis
-        prompt = f"""You are a plant care expert. Analyze this image of a plant named {plant_name} (species: {plant_species}).
+        prompt = f"""You are a plant care expert. Analyze this image of a plant named {plant_name} (species: {plant_species}).{sensor_context}
 
-Based on visual indicators like soil moisture, leaf appearance, color, and overall plant condition, provide your assessment in the following JSON format:
+Based on visual indicators like soil moisture, leaf appearance, color, and overall plant condition{', combined with the sensor readings above,' if sensor_context else ','} provide your assessment in the following JSON format:
 
 {{
   "hydration": "well_hydrated" | "slightly_dry" | "dry" | "very_dry" | "overwatered",

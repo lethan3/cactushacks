@@ -251,8 +251,21 @@ class ActualPlant(Plant):
             
             # Take picture at plant's position
             image = camera.take_picture()
-            # Analyze image using overshoot.ai
-            result = overshoot_client.analyze_plant_image(image, self.name, self.species)
+            
+            # Only call OpenAI API if image was successfully produced
+            if image is None:
+                print(f"Warning: No image produced for {self.name}, using fallback status")
+                return self.format_observable_status()
+            
+            # Read sensors before sending to cloud model
+            from utils.sensors import read_all_sensors
+            sensor_readings = read_all_sensors()
+            
+            # Analyze image using OpenAI Vision API, including sensor data
+            result = overshoot_client.analyze_plant_image(
+                image, self.name, self.species,
+                sensor_readings=sensor_readings
+            )
             return result
         except Exception as e:
             print(f"Error taking picture with camera: {e}")
