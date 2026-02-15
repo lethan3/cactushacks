@@ -1,0 +1,12 @@
+services:
+  - type: web
+    name: plant-care-mcp-server
+    env: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: python server.py
+    envVars:
+      - key: PORT
+        value: 8000
+      - key: PROJECT_DIR
+        value: /opt/render/project/src
+    healthCheckPath: /mcp

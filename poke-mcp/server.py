@@ -1,15 +1,17 @@
 #!/usr/bin/env python3
 """
 FastMCP server wrapping the Plant Care AI Agent functionality.
+Based on https://github.com/InteractionCo/mcp-server-template
 """
 import subprocess
 import sys
 import json
+import os
 from pathlib import Path
 from fastmcp import FastMCP
 
-# Project directory
-PROJECT_DIR = "/home/lethan3/Documents/code/treehacks/cactushacks"
+# Project directory - use relative path or environment variable
+PROJECT_DIR = os.getenv("PROJECT_DIR", str(Path(__file__).parent.parent))
 
 mcp = FastMCP("Plant Care AI Agent")
 
@@ -28,8 +30,12 @@ def run_simulation(steps: int = 10, time_step: int = 30, model: str = "llama3.2"
         Simulation output including plant status updates and agent actions
     """
     try:
+        harness_path = Path(PROJECT_DIR) / "harness.py"
+        if not harness_path.exists():
+            return f"Error: harness.py not found at {harness_path}"
+        
         result = subprocess.run(
-            ["python3", "harness.py", "--steps", str(steps), "--time-step", str(time_step), "--model", model],
+            [sys.executable, str(harness_path), "--steps", str(steps), "--time-step", str(time_step), "--model", model],
             capture_output=True,
             text=True,
             cwd=PROJECT_DIR,
@@ -73,12 +79,13 @@ def check_plant_status() -> str:
         latest_log = log_files[0]
 
         # Read last 100 lines of the log
-        result = subprocess.run(
-            ["tail", "-100", str(latest_log)],
-            capture_output=True,
-            text=True,
-            cwd=PROJECT_DIR
-        )
+        try:
+            with open(latest_log, 'r', encoding='utf-8') as f:
+                lines = f.readlines()
+                last_lines = lines[-100:] if len(lines) > 100 else lines
+                return f"Latest log file: {latest_log.name}\n\n{''.join(last_lines)}"
+        except Exception as e:
+            return f"Error reading log file: {str(e)}"
 
         return f"Latest log file: {latest_log.name}\n\n{result.stdout}"
     except Exception as e:
@@ -95,15 +102,15 @@ def list_available_species() -> str:
     """
     try:
         # Run Python to import and access the Plant class constants
-        code = """
+        code = f"""
 import sys
-sys.path.insert(0, '/home/lethan3/Documents/code/treehacks/cactushacks')
+sys.path.insert(0, r'{PROJECT_DIR}')
 from utils.plant import Plant
 import json
 print(json.dumps(Plant.SPECIES_CARE, indent=2))
 """
         result = subprocess.run(
-            ["python3", "-c", code],
+            [sys.executable, "-c", code],
             capture_output=True,
             text=True,
             cwd=PROJECT_DIR
@@ -260,7 +267,7 @@ except Exception as e:
     print(f"Error: {{str(e)}}")
 """
         result = subprocess.run(
-            ["python3", "-c", code],
+            [sys.executable, "-c", code],
             capture_output=True,
             text=True,
             cwd=PROJECT_DIR,
@@ -309,12 +316,16 @@ def install_dependencies() -> str:
         Installation output
     """
     try:
+        requirements_path = Path(PROJECT_DIR) / "requirements.txt"
+        if not requirements_path.exists():
+            return f"Error: requirements.txt not found at {requirements_path}"
+        
         result = subprocess.run(
-            ["pip3", "install", "-r", "requirements.txt"],
+            [sys.executable, "-m", "pip", "install", "-r", str(requirements_path)],
             capture_output=True,
             text=True,
             cwd=PROJECT_DIR,
-            timeout=120
+            timeout=300
         )
 
         output = result.stdout
@@ -332,7 +343,13 @@ def install_dependencies() -> str:
 
 
 if __name__ == "__main__":
+    import os
+    port = int(os.getenv("PORT", 8000))
+    host = os.getenv("HOST", "0.0.0.0")
+    
     print("Starting Plant Care AI Agent MCP Server...")
     print(f"Project directory: {PROJECT_DIR}")
-    print("Server running on http://0.0.0.0:8765")
-    mcp.run(transport="streamable-http", host="0.0.0.0", port=8765)
+    print(f"Server running on http://{host}:{port}/mcp")
+    print("NOTE: Connect to the /mcp endpoint using 'Streamable HTTP' transport")
+    
+    mcp.run(transport="streamable-http", host=host, port=port)

@@ -17,9 +17,9 @@ The Plant Care AI Agent is a simulation framework where an AI agent (powered by 
 
 - **Server Name**: Plant Care AI Agent
 - **Transport**: Streamable HTTP
-- **Host**: 0.0.0.0
-- **Port**: 8765
-- **Endpoint**: http://localhost:8765/mcp
+- **Host**: 0.0.0.0 (configurable via HOST env var)
+- **Port**: 8000 (configurable via PORT env var, defaults to 8000)
+- **Endpoint**: http://localhost:8000/mcp (NOTE: Must include `/mcp`!)
 
 ## Available Tools
 
@@ -88,20 +88,34 @@ Install project dependencies from requirements.txt.
 
 1. Create a virtual environment and install dependencies:
 ```bash
-cd /home/lethan3/Documents/code/treehacks/cactushacks/poke-mcp
-uv venv .venv
-uv pip install -r requirements.txt -p .venv/bin/python
+cd poke-mcp
+python3 -m venv .venv
+source .venv/bin/activate  # On Windows: .venv\Scripts\activate
+pip install -r requirements.txt
 ```
 
 2. Start the server:
 ```bash
-.venv/bin/python server.py
+python server.py
 ```
 
-Or run in the background:
+The server will start on `http://localhost:8000/mcp`
+
+## Testing Locally
+
+You can test the server using the MCP Inspector:
+
 ```bash
-.venv/bin/python server.py &
+# In one terminal, start the server:
+python server.py
+
+# In another terminal, start the inspector:
+npx @modelcontextprotocol/inspector
 ```
+
+Then open http://localhost:3000 and connect to `http://localhost:8000/mcp` using "Streamable HTTP" transport.
+
+**IMPORTANT**: Make sure to include `/mcp` in the URL!
 
 ## Prerequisites
 
@@ -118,9 +132,42 @@ poke-mcp/
 └── README.md          # This file
 ```
 
+## Deployment
+
+### Option 1: Deploy to Render (One-Click)
+
+1. Fork this repository
+2. Connect your GitHub account to [Render](https://render.com)
+3. Create a new Web Service on Render
+4. Connect your forked repository
+5. Render will automatically detect the `render.yaml` configuration
+
+Your server will be available at `https://your-service-name.onrender.com/mcp` (NOTE: Include `/mcp`!)
+
+### Option 2: Manual Deployment
+
+1. Fork this repository
+2. Connect your GitHub account to Render
+3. Create a new Web Service on Render
+4. Connect your forked repository
+5. Set environment variables if needed:
+   - `PROJECT_DIR`: Path to project directory (defaults to relative path)
+   - `PORT`: Server port (defaults to 8000)
+
+## Poke Setup
+
+You can connect your MCP server to Poke at [poke.com/settings/connections](https://poke.com/settings/connections). 
+
+To test the connection explicitly, ask Poke something like:
+```
+Tell the subagent to use the "{connection name}" integration's "{tool name}" tool
+```
+
+If you run into persistent issues of Poke not calling the right MCP (e.g. after you've renamed the connection), you may send `clearhistory` to Poke to delete all message history and start fresh.
+
 ## Usage Example
 
-The server exposes tools via the MCP protocol. Clients can connect to `http://localhost:8765/mcp` and invoke tools such as:
+The server exposes tools via the MCP protocol. Clients can connect to `http://localhost:8000/mcp` and invoke tools such as:
 
 ```python
 # Example: Run a simulation

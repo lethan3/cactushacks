@@ -35,6 +35,9 @@ def main():
     parser.add_argument("--time-step", type=int, default=30, help="Time step in minutes")
     parser.add_argument("--steps", type=int, default=5, help="Number of time steps")
     parser.add_argument("--real-time", action="store_true", help="Run in real-time mode")
+    parser.add_argument("--poke-ai-key", default=None, help="Poke AI API key (or set POKE_AI_API_KEY env var)")
+    parser.add_argument("--poke-ai-url", default=None, help="Poke AI API URL (or set POKE_AI_API_URL env var)")
+    parser.add_argument("--poke-ai-disable", action="store_true", help="Disable Poke AI integration")
     args = parser.parse_args()
 
     clock = SimulatedClock(time_step_minutes=args.time_step)
@@ -45,7 +48,14 @@ def main():
     ]
     assert len(plants) == TOTAL_PLANTS, f"Expected {TOTAL_PLANTS} plants, got {len(plants)}"
 
-    agent = PlantCareAgent(model=args.model, host=args.host, timeout=args.timeout)
+    agent = PlantCareAgent(
+        model=args.model,
+        host=args.host,
+        timeout=args.timeout,
+        poke_ai_api_key=args.poke_ai_key,
+        poke_ai_api_url=args.poke_ai_url,
+        poke_ai_enabled=not args.poke_ai_disable
+    )
     agent.register_plants(plants)
     agent.task_queue = task_queue
     agent.clock = clock

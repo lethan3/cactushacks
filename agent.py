@@ -4,6 +4,7 @@ from pathlib import Path
 from datetime import datetime, timedelta
 
 from utils.logger import AgentLogger
+from utils.poke_ai import PokeAIClient
 
 
 # ---------------------------------------------------------------------------
@@ -55,7 +56,8 @@ class PlantCareAgent:
     """AI agent that manages plant care using Ollama with native tool calling."""
 
     def __init__(self, model="qwen3:4b-instruct-2507-q4_K_M", host="http://localhost:11434",
-                 log_dir=None, enable_logging=True, timeout=300, max_rounds=5):
+                 log_dir=None, enable_logging=True, timeout=300, max_rounds=5,
+                 poke_ai_api_key=None, poke_ai_api_url=None, poke_ai_enabled=True):
         self.model = model
         self.client = ollama.Client(host=host, timeout=timeout)
         self.max_rounds = max_rounds
@@ -66,6 +68,11 @@ class PlantCareAgent:
         self.current_plant_index = 0
 
         self.logger = AgentLogger(log_dir=log_dir, log_to_file=enable_logging) if enable_logging else None
+        self.poke_ai = PokeAIClient(
+            api_key=poke_ai_api_key,
+            api_url=poke_ai_api_url,
+            enabled=poke_ai_enabled
+        )
         self._system_prompt = (Path(__file__).parent / "prompts" / "agent_prompt.txt").read_text().strip()
 
     def register_plants(self, plants):
@@ -235,11 +242,29 @@ class PlantCareAgent:
 
                 messages.append({"role": "tool", "content": json.dumps(result)})
 
-        return {
+        result_dict = {
             "response": response_text,
             "tool_results": tool_results,
             "timestamp": now.isoformat(),
         }
+        
+        # Send message to Poke AI after response
+        if self.poke_ai.enabled:
+            message_content = self.poke_ai.format_agent_response(
+                response_text=response_text,
+                tool_results=tool_results,
+                plant_name=plant.name,
+                timestamp=now.isoformat()
+            )
+            metadata = {
+                "plant_name": plant.name,
+                "plant_species": plant.species,
+                "timestamp": now.isoformat(),
+                "tool_count": len(tool_results)
+            }
+            self.poke_ai.send_message(message_content, metadata)
+        
+        return result_dict
 
     def process_due_tasks(self):
         if not self.task_queue or not self.clock:
