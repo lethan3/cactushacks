@@ -2,3 +2,4 @@
 
 # Sprout
 ### Autonomous AI-Driven Autonomous Robotic Microfarm
+TreeHacks 2026 NVIDIA Edge AI Track Winner
