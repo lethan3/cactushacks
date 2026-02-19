@@ -4,6 +4,7 @@
 ### Autonomous AI-Driven Autonomous Robotic Microfarm
 #### TreeHacks 2026 NVIDIA Edge AI Track Winner
 
+Check out our [Devpost]([https://www.codecademy.com](https://devpost.com/software/greenguardian-microfarm)) and view our [Demo Video] (https://www.youtube.com/watch?v=PbnM8TVgxBQ) .
 ### Inspiration
 We wanted to bridge the gap between rigid, industrial robotics and the organic beauty of nature. The idea was to create a "gardener" that doesn't just automate a task, but feels like a companion to the plants it cares for. We were inspired by the precision of 3D printers and CNC machines but wanted to apply that technology to something living, creating a system that is both high-tech and deeply aesthetic.
 
